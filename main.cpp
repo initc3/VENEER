@@ -217,19 +217,25 @@ struct Complex {
 	Complex() : x(0.0), y(0.0) {
 	}
 
+	Complex(float x) : x(x), y(0.0) {
+	}
+
 	Complex(float x, float y): x(x), y(y) {
 	}
 };
 
-#define mul(a, b) (Complex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x))
-void FFT(Complex P[], int n, int oper) {
+inline Complex mul(const Complex &a, const Complex &b) {
+	return Complex(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+void DFT(Complex P[], int n, int oper) {
 	for (int i = 1, j = 0; i < n - 1; i++) {
 		for (int s = n; j ^= s >>= 1, ~j & s; );
 		if (i < j) swap(P[i], P[j]);
 	}
 	for (int d = 0; (1 << d) < n; d++) {
 		int m = 1 << d, m2 = m * 2;
-		double p0 = PI / m * oper;
+		float p0 = PI / m * oper;
 		Complex unit_p0(cos(p0), sin(p0));
 		for (int i = 0; i < n; i += m2) {
 			Complex unit(1.0, 0.0);
@@ -243,7 +249,6 @@ void FFT(Complex P[], int n, int oper) {
 		}
 	}
 }
-#undef mul
 
 /******************** LAYERS ********************/
 
@@ -291,7 +296,7 @@ struct Conv: public Layer {
 
 	NDArray pad(const NDArray &input) {
 		int image_width   = input.shape[1];
-		int image_height = input.shape[2];
+		int image_height  = input.shape[2];
 		int filter_width  = w.shape[2];
 		int filter_height = w.shape[3];
 		int pad_t = (filter_height - 1) / 2; // floor
@@ -313,7 +318,6 @@ struct Conv: public Layer {
 						output.array.push_back(0.0);
 					else
 						output.array.push_back(input.array[cnt++]);
-		output.check_shape();
 		return output;
 	}
 
@@ -322,23 +326,65 @@ struct Conv: public Layer {
 		NDArray input = pad(_input);
 		NDArray output;
 		output.shape = output_shape;
-		
-		for (int j = 0; j < output.shape[0]; ++j)
-			for (int x0 = 0; x0 < output.shape[1]; ++x0)
-				for (int y0 = 0; y0 < output.shape[2]; ++y0) {
-					float result = 0.0f;
-					for (int i = 0; i < input.shape[0]; ++i)
-						for (int dx = 0; dx < w.shape[2]; ++dx)
-							for (int dy = 0; dy < w.shape[3]; ++dy) {
-								int input_idx[] = {i, x0 + dx, y0 + dy};
-								int filter_idx[] = {i, j, dx, dy};
-								result += input.get(vector<int>(input_idx, input_idx + 3)) * w.get(vector<int>(filter_idx, filter_idx + 4));
-							}
-					output.array.push_back(result);
-				}
+
+		int input_c = input.shape[0];
+		int input_w = input.shape[1];
+		int input_h = input.shape[2];
+
+		int output_c = output.shape[0];
+		int output_w = output.shape[1];
+		int output_h = output.shape[2];
+
+		int filter_w = w.shape[2];
+		int filter_h = w.shape[3];
+
+		output.array = vector<float>(output_c * output_w * output_h, 0.0f);
+		for (int j = 0; j < output_c; ++j) {
+			for (int i = 0; i < input_c; ++i) {
+				// calculate correlation2D(input[i], filter[i][j])
+				int la = input_w * input_h;
+				int lb = filter_w * input_h;
+				int len = 1;
+				for ( ; len < la + lb - 1; len <<= 1);
+
+				Complex *A = new Complex[len];
+				Complex *B = new Complex[len];
+				Complex *C = new Complex[len];
+				for (int pos = 0, cnt = i * input_w * input_h; pos < len; ++pos)
+					A[pos] = pos < la ? input.array[cnt++] : 0.0f;
+				int tmp = 0; // TODO: delete this
+				for (int pos = 0, cnt = (i * output_c + j) * filter_w * filter_h; pos < len; ++pos)
+					B[pos] = pos % input_h < filter_h && pos < lb ? ++tmp, w.array[cnt++] : 0.0f;
+				for (int pos_l = 0, pos_r = lb - 1; pos_l < pos_r; ++pos_l, --pos_r)
+					swap(B[pos_l], B[pos_r]);
+
+				assert (tmp == filter_w * filter_h);
+				DFT(A, len, 1);
+				DFT(B, len, 1);
+				for (int i = 0; i < len; i++)
+					C[i] = mul(A[i], B[i]);
+				DFT(C, len, -1);
+				for (int i = 0; i < la + lb - 1; ++i)
+					C[i].x = C[i].x / len;
+			
+//				int cnt = j * output_w * output_h;
+				for (int w0 = 0; w0 + filter_w <= input_w; ++w0)
+					for (int h0 = 0; h0 + filter_h <= input_h; ++h0) {
+						int p = w0 * input_h + h0;
+//						output.array[cnt++] += C[p + lb - 1].x;
+						int idx[] = {j, w0, h0};
+						output.get(vector<int>(idx, idx + 3)) += C[p + lb - 1].x;
+					}
+
+				delete [] A;
+				delete [] B;
+				delete [] C;
+			}
+		}
 		return output;
 	}
 };
+
 
 struct Bias: public Layer {
 
@@ -580,7 +626,7 @@ int input_shape[N_LAYERS][3] = {
 int main() {
 	map<string, NDArray> weights = load_pretrained_model("pretrained.txt");
 
-	Layer* layers[N_LAYERS] = {
+	Layer* layers[N_LAYERS] = { 
 		new Conv("conv1", vector<int>(input_shape[0], input_shape[0] + 3), weights),
 		new Bias("conv1", vector<int>(input_shape[1], input_shape[1] + 3), weights),
 		new ReLU("conv1", vector<int>(input_shape[2], input_shape[2] + 3), weights),
@@ -630,12 +676,6 @@ int main() {
 		NDArray feed = image;
 		for (int i = 0; i < N_LAYERS; ++i) {
 			feed = layers[i]->forward(feed);
-#ifdef DEBUG
-			cout << "layer " << i << ":" << endl << "\t";
-			for (vector<int> :: iterator itr(feed.shape.begin()); itr != feed.shape.end(); ++itr)
-				cout << *itr << " ";
-			cout << endl;
-#endif
 		}
 		int argmax = -1;
 		float max = -1e10;
@@ -646,15 +686,16 @@ int main() {
 				argmax = i;
 			}
 		}
-//		printf("\nargmax = %d\n", argmax);
 		if (argmax == label) {
 			printf(".");
 			++correct;
 		}
-		else
+		else {
 			printf("x");
-		if (test % 5 == 4 || test == N - 1)
+		}
+		if (test % 5 == 4 || test == N - 1) {
 			puts("");
+		}
 	}
 	printf("%.3f\n", (float) correct / N);
 
