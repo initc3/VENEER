@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 #include <vector>
 #include <map>
@@ -14,6 +15,8 @@ using namespace std;
 
 const int HASH_BYTES = 32;
 const double PI = 3.14159265358979323846264338327950288;
+
+//#define DEBUG
 
 /****************** The butterfly tree stuff ****************************************/
 
@@ -142,6 +145,25 @@ struct NDArray {
 	~NDArray() {
 	}
 
+	string get_shape_str() const {
+		ostringstream os;
+		os << "[";
+		for (int i = 0; i < (int) shape.size(); ++i) {
+			if (i != 0)
+				os << ", ";
+			os << shape[i];
+		}
+		os << "]";
+		return os.str();
+	}
+
+	void check_shape() const {
+		int e = 1;
+		for (int i = 0; i < (int) shape.size(); ++i)
+			e = e * shape[i];
+		assert (e == (int) array.size());
+	}
+
 	float& get(const vector<int> &pos) {
 		int p = 0, mul = 1;
 		for (int i = (int)pos.size() - 1; i >= 0; --i) {
@@ -175,9 +197,7 @@ map<string, NDArray> load_pretrained_model(const char *path) {
 			fin >> tmp;
 			array.shape.push_back(tmp);
 			e *= tmp;
-			cout << tmp << " ";
 		}
-		cout << endl;
 		array.array = vector<float>(e, 0.0);
 		for (int j = 0; j < e; ++j) {
 			fin >> array.array[j];
@@ -228,23 +248,29 @@ void FFT(Complex P[], int n, int oper) {
 /******************** LAYERS ********************/
 
 struct Layer {
-//	virtual NDArray forward(const NDArray &input) = 0;
 	string name;
 	vector<int> input_shape, output_shape;
+	virtual NDArray forward(const NDArray &input) {
+		cout << "no no no" << endl;
+		return input;
+	}
 };
 
 struct Conv: public Layer {
+
+	NDArray w;
 
 	Conv(const string &name, const vector<int> &input_shape, map<string, NDArray> &weights) {
 		this->name = name + "/conv";
 		this->input_shape = input_shape;
 		this->output_shape = input_shape;
-		NDArray w(weights[name + "/w"]);
+		w = weights[name + "/w"];
 		this->output_shape[0] = w.shape[1];
 
 		assert(input_shape.size() == 3);
 		assert(w.shape.size() == 4);
 
+#ifdef DEBUG
 		printf("layer %s\n", this->name.c_str());
 		printf("\tinput_shape = ");
 		for (vector<int> :: const_iterator itr(input_shape.begin()); itr != input_shape.end(); ++itr)
@@ -260,8 +286,58 @@ struct Conv: public Layer {
 		for (vector<int> :: iterator itr(w.shape.begin()); itr != w.shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
+#endif
 	}
 
+	NDArray pad(const NDArray &input) {
+		int image_width   = input.shape[1];
+		int image_height = input.shape[2];
+		int filter_width  = w.shape[2];
+		int filter_height = w.shape[3];
+		int pad_t = (filter_height - 1) / 2; // floor
+		int pad_b = filter_height       / 2; // ceil
+		int pad_l = (filter_width - 1)  / 2; // floor
+		int pad_r = filter_width        / 2; // ceil
+
+		NDArray output;
+		output.shape = vector<int>(3, 0);
+		output.shape[0] = input.shape[0];
+		output.shape[1] = input.shape[1] + filter_width - 1;
+		output.shape[2] = input.shape[2] + filter_height - 1;
+
+		int cnt = 0;
+		for (int c = 0; c < input.shape[0]; ++c)
+			for (int i = -pad_l; i < image_width + pad_r; ++i)
+				for (int j = -pad_t; j < image_height + pad_b; ++j)
+					if (i < 0 || i >= image_width || j < 0 || j >= image_height)
+						output.array.push_back(0.0);
+					else
+						output.array.push_back(input.array[cnt++]);
+		output.check_shape();
+		return output;
+	}
+
+	NDArray forward(const NDArray &_input) {
+		assert(_input.shape == input_shape);
+		NDArray input = pad(_input);
+		NDArray output;
+		output.shape = output_shape;
+		
+		for (int j = 0; j < output.shape[0]; ++j)
+			for (int x0 = 0; x0 < output.shape[1]; ++x0)
+				for (int y0 = 0; y0 < output.shape[2]; ++y0) {
+					float result = 0.0f;
+					for (int i = 0; i < input.shape[0]; ++i)
+						for (int dx = 0; dx < w.shape[2]; ++dx)
+							for (int dy = 0; dy < w.shape[3]; ++dy) {
+								int input_idx[] = {i, x0 + dx, y0 + dy};
+								int filter_idx[] = {i, j, dx, dy};
+								result += input.get(vector<int>(input_idx, input_idx + 3)) * w.get(vector<int>(filter_idx, filter_idx + 4));
+							}
+					output.array.push_back(result);
+				}
+		return output;
+	}
 };
 
 struct Bias: public Layer {
@@ -278,24 +354,26 @@ struct Bias: public Layer {
 		assert(b.shape.size() == 1);
 		assert(input_shape.front() == b.shape[0]);
 
+#ifdef DEBUG
 		printf("layer %s\n", this->name.c_str());
 		printf("\tinput_shape = ");
 		for (vector<int> :: const_iterator itr(input_shape.begin()); itr != input_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
-
 		printf("\toutput_shape = ");
 		for (vector<int> :: const_iterator itr(output_shape.begin()); itr != output_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
-
 		printf("\tb_shape = ");
 		for (vector<int> :: iterator itr(b.shape.begin()); itr != b.shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
+#endif
 	}
 
 	NDArray forward(const NDArray &input) {
+		assert(input.shape == input_shape);
+
 		int alter = 1;
 		for (int i = 1; i < (int)input_shape.size(); ++i)
 			alter *= input_shape[i];
@@ -319,6 +397,7 @@ struct ReLU: public Layer {
 		this->input_shape = input_shape;
 		this->output_shape = input_shape;
 
+#ifdef DEBUG
 		printf("layer %s\n", this->name.c_str());
 		printf("\tinput_shape = ");
 		for (vector<int> :: const_iterator itr(input_shape.begin()); itr != input_shape.end(); ++itr)
@@ -329,9 +408,12 @@ struct ReLU: public Layer {
 		for (vector<int> :: const_iterator itr(output_shape.begin()); itr != output_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
+#endif
 	}
 
 	NDArray forward(const NDArray &input) {
+		assert(input.shape == input_shape);
+
 		NDArray output = input;
 		for (int i = 0; i < (int)output.array.size(); ++i)
 			output.array[i] = max(output.array[i], 0.0f);
@@ -349,6 +431,8 @@ struct Pool: public Layer {
 		this->output_shape[2] /= 2;
 
 		assert(input_shape.size() == 3);
+
+#ifdef DEBUG
 		printf("layer %s\n", this->name.c_str());
 		printf("\tinput_shape = ");
 		for (vector<int> :: const_iterator itr(input_shape.begin()); itr != input_shape.end(); ++itr)
@@ -359,9 +443,12 @@ struct Pool: public Layer {
 		for (vector<int> :: const_iterator itr(output_shape.begin()); itr != output_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
+#endif
 	}
 
 	NDArray forward(const NDArray &input) {
+		assert(input.shape == input_shape);
+
 		NDArray output;
 		output.shape = output_shape;
 		for (int c = 0; c < input.shape[0]; ++c)
@@ -393,6 +480,8 @@ struct Flatten: public Layer {
 		this->output_shape = vector<int>(1, _output_shape);
 
 		assert(input_shape.size() == 3);
+
+#ifdef DEBUG
 		printf("layer %s\n", this->name.c_str());
 		printf("\tinput_shape = ");
 		for (vector<int> :: const_iterator itr(input_shape.begin()); itr != input_shape.end(); ++itr)
@@ -403,9 +492,12 @@ struct Flatten: public Layer {
 		for (vector<int> :: const_iterator itr(output_shape.begin()); itr != output_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
+#endif
 	}
 
 	NDArray forward(const NDArray &input) {
+		assert(input.shape == input_shape);
+
 		NDArray output;
 		output.shape = output_shape;
 		vector<int> pos(3, 0);
@@ -418,29 +510,51 @@ struct Flatten: public Layer {
 };
 
 struct MatMul: public Layer {
+
+	NDArray w;
+
 	MatMul(const string &name, const vector<int> &input_shape, map<string, NDArray> &weights) {
 		this->name = name + "/matmul";
 		this->input_shape = input_shape;
-		NDArray w(weights[name + "/w"]);
-		this->output_shape = vector<int>(1, w.shape[1]);
+		w = weights[name + "/w"];
+		this->output_shape = vector<int>(1, w.shape[0]);
 
 		assert(input_shape.size() == 1);
+
+#ifdef DEBUG
 		printf("layer %s\n", this->name.c_str());
 		printf("\tinput_shape = ");
 		for (vector<int> :: const_iterator itr(input_shape.begin()); itr != input_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
-
 		printf("\toutput_shape = ");
 		for (vector<int> :: const_iterator itr(output_shape.begin()); itr != output_shape.end(); ++itr)
 			printf(" %d", *itr);
 		printf("\n");
+#endif
 	}
+
+	NDArray forward(const NDArray &input) {
+		assert(input.shape == input_shape);
+		NDArray output;
+		output.shape = output_shape;
+		int matrix_cnt = 0;
+		for (int i = 0; i < w.shape[0]; ++i) {
+			// multiply the i-th row with the input vector
+			int input_cnt = 0;
+			float result = 0.0f;
+			for (int j = 0; j < w.shape[1]; ++j)
+				result += w.array[matrix_cnt++] * input.array[input_cnt++];
+			output.array.push_back(result);
+		}
+		return output;
+	}
+
 };
 
+const int N_LAYERS = 15;
 
-
-int input_shape[][3] = {
+int input_shape[N_LAYERS][3] = {
 	{1, 28, 28},  //  0: conv1/Conv
 	{32, 28, 28}, //  1: conv1/Bias
 	{32, 28, 28}, //  2: conv1/ReLU
@@ -458,7 +572,7 @@ int input_shape[][3] = {
 	{512},        // 10: fc1/Bias
 	{512},        // 11: fc1/ReLU
 
-	{10},         // 12: fc2/MatMul
+	{512},         // 12: fc2/MatMul
 	{10},         // 13: fc2/Bias
 	{10}          // 14: fc2/ReLU
 };
@@ -466,23 +580,83 @@ int input_shape[][3] = {
 int main() {
 	map<string, NDArray> weights = load_pretrained_model("pretrained.txt");
 
-	Layer conv1_conv = Conv("conv1", vector<int>(input_shape[0], input_shape[0] + 3), weights);
-	Layer conv1_bias = Bias("conv1", vector<int>(input_shape[1], input_shape[1] + 3), weights);
-	Layer conv1_relu = Bias("conv1", vector<int>(input_shape[2], input_shape[2] + 3), weights);
-	Layer pool1      = Pool("pool1", vector<int>(input_shape[3], input_shape[3] + 3), weights);
+	Layer* layers[N_LAYERS] = {
+		new Conv("conv1", vector<int>(input_shape[0], input_shape[0] + 3), weights),
+		new Bias("conv1", vector<int>(input_shape[1], input_shape[1] + 3), weights),
+		new ReLU("conv1", vector<int>(input_shape[2], input_shape[2] + 3), weights),
+		new Pool("pool1", vector<int>(input_shape[3], input_shape[3] + 3), weights),
 
-	Layer conv2_conv = Conv("conv2", vector<int>(input_shape[4], input_shape[4] + 3), weights);
-	Layer conv2_bias = Bias("conv2", vector<int>(input_shape[5], input_shape[5] + 3), weights);
-	Layer conv2_relu = Bias("conv2", vector<int>(input_shape[6], input_shape[6] + 3), weights);
-	Layer pool2      = Pool("pool2", vector<int>(input_shape[7], input_shape[7] + 3), weights);
+		new Conv("conv2", vector<int>(input_shape[4], input_shape[4] + 3), weights),
+		new Bias("conv2", vector<int>(input_shape[5], input_shape[5] + 3), weights),
+		new ReLU("conv2", vector<int>(input_shape[6], input_shape[6] + 3), weights),
+		new Pool("pool2", vector<int>(input_shape[7], input_shape[7] + 3), weights),
 
-	Layer flatten    = Flatten("flatten", vector<int>(input_shape[8], input_shape[8] + 3), weights);
+		new Flatten("flatten", vector<int>(input_shape[8], input_shape[8] + 3), weights),
 
-	Layer fc1_matmul = MatMul("fc1", vector<int>(input_shape[9], input_shape[9] + 1), weights);
-	Layer fc1_bias   = Bias("fc1", vector<int>(input_shape[10], input_shape[10] + 1), weights);
+		new MatMul("fc1", vector<int>(input_shape[9], input_shape[9] + 1), weights),
+		new Bias("fc1", vector<int>(input_shape[10], input_shape[10] + 1), weights),
+		new ReLU("fc1", vector<int>(input_shape[11], input_shape[11] + 1), weights),
 
-	Layer fc2_matmul = MatMul("fc2", vector<int>(input_shape[11], input_shape[11] + 1), weights);
-	Layer fc2_bias   = Bias("fc2", vector<int>(input_shape[12], input_shape[12] + 1), weights);
+		new MatMul("fc2", vector<int>(input_shape[12], input_shape[12] + 1), weights),
+		new Bias("fc2", vector<int>(input_shape[13], input_shape[13] + 1), weights),
+		new ReLU("fc2", vector<int>(input_shape[14], input_shape[14] + 1), weights)
+	};
+
+	for (int i = 1; i < N_LAYERS; ++i) {
+#ifdef DEBUG
+		printf("checking %s, %s\n", layers[i - 1]->name.c_str(), layers[i]->name.c_str());
+#endif
+		assert(layers[i - 1]->output_shape == layers[i]->input_shape);
+	}
+
+	ifstream fin("test_images.txt");
+
+	int N, correct = 0;
+	fin >> N;
+#ifdef DEBUG
+	N = 10;
+#endif
+	for (int test = 0; test < N; ++test) {
+		static int shape[] = {1, 28, 28};
+		int label;
+		NDArray image;
+		image.shape = vector<int>(shape, shape + 3);
+		image.array = vector<float>(784, 0.0f);
+
+		fin >> label;
+		for (int i = 0; i < 784; ++i)
+			fin >> image.array[i];
+
+		NDArray feed = image;
+		for (int i = 0; i < N_LAYERS; ++i) {
+			feed = layers[i]->forward(feed);
+#ifdef DEBUG
+			cout << "layer " << i << ":" << endl << "\t";
+			for (vector<int> :: iterator itr(feed.shape.begin()); itr != feed.shape.end(); ++itr)
+				cout << *itr << " ";
+			cout << endl;
+#endif
+		}
+		int argmax = -1;
+		float max = -1e10;
+		for (int i = 0; i < (int) feed.array.size(); ++i) {
+			float value = feed.array[i];
+			if (max < value) {
+				max = value;
+				argmax = i;
+			}
+		}
+//		printf("\nargmax = %d\n", argmax);
+		if (argmax == label) {
+			printf(".");
+			++correct;
+		}
+		else
+			printf("x");
+		if (test % 5 == 4 || test == N - 1)
+			puts("");
+	}
+	printf("%.3f\n", (float) correct / N);
 
 	return 0;
 }
