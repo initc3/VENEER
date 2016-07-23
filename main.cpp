@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <vector>
 #include <map>
+#include <ctime>
+#include "sha256.h"
 
 using namespace std;
 
@@ -32,17 +34,9 @@ struct node {
  * @o output string, HASH_BYTES byte
  */
 void sha2_digest(char *s, int n, char *o) {
-	unsigned long long a[4] = {17, 19, 23, 29};
-	unsigned long long result[4] = {0, 0, 0, 0};
-	for (int i = 0; i < n; ++i)
-		for (int j = 0; j < 4; ++j)
-			result[j] = result[j] * a[j] + s[i];
-	int p = 0;
-	for (int i = 0; i < 4; ++i)
-		for (int j = 0; j < 8; ++j) {
-			o[p++] = (char)(result[j] & 255);
-			result[j] >>= 8;
-		}
+	string input = string(s, s + n);
+	string output = sha256(input);
+	strcpy(o, output.c_str());
 }
 
 /**
@@ -259,11 +253,30 @@ struct Layer {
 		cout << "no no no" << endl;
 		return input;
 	}
+	
+	Layer(): name(), input_shape(), output_shape() {
+	}
+
+private:
+	Layer operator = (const Layer &rhs); // copy is disabled
+	Layer(const Layer &rhs);
 };
 
 struct Conv: public Layer {
 
 	NDArray w;
+	Complex *dft_of_filter;
+	Complex *dft_of_input;
+	Complex *buffer;
+
+	~Conv() {
+		if (dft_of_filter)
+			delete [] dft_of_filter;
+		if (dft_of_input)
+			delete [] dft_of_input;
+		if (buffer)
+			delete [] buffer;
+	}
 
 	Conv(const string &name, const vector<int> &input_shape, map<string, NDArray> &weights) {
 		this->name = name + "/conv";
@@ -271,6 +284,9 @@ struct Conv: public Layer {
 		this->output_shape = input_shape;
 		w = weights[name + "/w"];
 		this->output_shape[0] = w.shape[1];
+		this->dft_of_filter = NULL;
+		this->dft_of_input = NULL;
+		this->buffer = NULL;
 
 		assert(input_shape.size() == 3);
 		assert(w.shape.size() == 4);
@@ -292,6 +308,37 @@ struct Conv: public Layer {
 			printf(" %d", *itr);
 		printf("\n");
 #endif
+
+		preprocess();
+	}
+
+	void preprocess() {
+		int filter_w = w.shape[2];
+		int filter_h = w.shape[3];
+		int input_c = input_shape[0];
+		int input_w = input_shape[1] + filter_w - 1;
+		int input_h = input_shape[2] + filter_h - 1;
+		int output_c = output_shape[0];
+		int la = input_w * input_h;
+		int lb = filter_w * input_h;
+		int len = 1;
+		for ( ; len < la + lb - 1; len <<= 1);
+
+		dft_of_filter = new Complex[input_c * output_c * len];
+		dft_of_input = new Complex[input_c * len];
+		buffer = new Complex[len];
+
+		for (int oc = 0; oc < output_c; ++oc) {
+			for (int ic = 0; ic < input_c; ++ic) {
+				Complex *B = dft_of_filter + (ic * output_c + oc) * len;
+				for (int pos = 0, cnt = (ic * output_c + oc) * filter_w * filter_h; pos < len; ++pos)
+					B[pos] = pos % input_h < filter_h && pos < lb ? w.array[cnt++] : 0.0f;
+				for (int pos_l = 0, pos_r = lb - 1; pos_l < pos_r; ++pos_l, --pos_r)
+					swap(B[pos_l], B[pos_r]);
+				assert(int(B + len - dft_of_filter) <= input_c * output_c * len);
+				DFT(B, len, 1);
+			}
+		}
 	}
 
 	NDArray pad(const NDArray &input) {
@@ -330,55 +377,42 @@ struct Conv: public Layer {
 		int input_c = input.shape[0];
 		int input_w = input.shape[1];
 		int input_h = input.shape[2];
-
 		int output_c = output.shape[0];
 		int output_w = output.shape[1];
 		int output_h = output.shape[2];
-
 		int filter_w = w.shape[2];
 		int filter_h = w.shape[3];
+		int la = input_w * input_h;
+		int lb = filter_w * input_h;
+		int len = 1;
+		for ( ; len < la + lb - 1; len <<= 1);
 
 		output.array = vector<float>(output_c * output_w * output_h, 0.0f);
-		for (int j = 0; j < output_c; ++j) {
-			for (int i = 0; i < input_c; ++i) {
-				// calculate correlation2D(input[i], filter[i][j])
-				int la = input_w * input_h;
-				int lb = filter_w * input_h;
-				int len = 1;
-				for ( ; len < la + lb - 1; len <<= 1);
 
-				Complex *A = new Complex[len];
-				Complex *B = new Complex[len];
-				Complex *C = new Complex[len];
-				for (int pos = 0, cnt = i * input_w * input_h; pos < len; ++pos)
-					A[pos] = pos < la ? input.array[cnt++] : 0.0f;
-				int tmp = 0; // TODO: delete this
-				for (int pos = 0, cnt = (i * output_c + j) * filter_w * filter_h; pos < len; ++pos)
-					B[pos] = pos % input_h < filter_h && pos < lb ? ++tmp, w.array[cnt++] : 0.0f;
-				for (int pos_l = 0, pos_r = lb - 1; pos_l < pos_r; ++pos_l, --pos_r)
-					swap(B[pos_l], B[pos_r]);
+		for (int ic = 0; ic < input_c; ++ic) {
+			Complex *A = dft_of_input + len * ic;
+			for (int pos = 0, cnt = ic * input_w * input_h; pos < len; ++pos) {
+				A[pos] = pos < la ? input.array[cnt++] : 0.0f;
+			}
+			DFT(A, len, 1);
+		}
 
-				assert (tmp == filter_w * filter_h);
-				DFT(A, len, 1);
-				DFT(B, len, 1);
+		for (int oc = 0; oc < output_c; ++oc) {
+			for (int ic = 0; ic < input_c; ++ic) {
+				Complex *A = dft_of_input + len * ic;
+				Complex *B = dft_of_filter + (ic * output_c + oc) * len;
+				Complex *C = buffer;
 				for (int i = 0; i < len; i++)
 					C[i] = mul(A[i], B[i]);
 				DFT(C, len, -1);
 				for (int i = 0; i < la + lb - 1; ++i)
 					C[i].x = C[i].x / len;
-			
-//				int cnt = j * output_w * output_h;
+				int cnt = oc * output_w * output_h;
 				for (int w0 = 0; w0 + filter_w <= input_w; ++w0)
 					for (int h0 = 0; h0 + filter_h <= input_h; ++h0) {
 						int p = w0 * input_h + h0;
-//						output.array[cnt++] += C[p + lb - 1].x;
-						int idx[] = {j, w0, h0};
-						output.get(vector<int>(idx, idx + 3)) += C[p + lb - 1].x;
+						output.array[cnt++] += C[p + lb - 1].x;
 					}
-
-				delete [] A;
-				delete [] B;
-				delete [] C;
 			}
 		}
 		return output;
@@ -438,7 +472,7 @@ struct Bias: public Layer {
 
 struct ReLU: public Layer {
 
-	ReLU(const string &name, const vector<int> &input_shape, map<string, NDArray> &weights) {
+	ReLU(const string &name, const vector<int> &input_shape) {
 		this->name = name + "/relu";
 		this->input_shape = input_shape;
 		this->output_shape = input_shape;
@@ -469,7 +503,7 @@ struct ReLU: public Layer {
 };
 
 struct Pool: public Layer {
-	Pool(const string &name, const vector<int> &input_shape, map<string, NDArray> &weights) {
+	Pool(const string &name, const vector<int> &input_shape) {
 		this->name = name + "/pool";
 		this->input_shape = input_shape;
 		this->output_shape = input_shape;
@@ -517,7 +551,7 @@ struct Pool: public Layer {
 };
 
 struct Flatten: public Layer {
-	Flatten(const string &name, const vector<int> &input_shape, map<string, NDArray> &weights) {
+	Flatten(const string &name, const vector<int> &input_shape) {
 		this->name = name;
 		this->input_shape = input_shape;
 		int _output_shape = 1;
@@ -618,7 +652,7 @@ int input_shape[N_LAYERS][3] = {
 	{512},        // 10: fc1/Bias
 	{512},        // 11: fc1/ReLU
 
-	{512},         // 12: fc2/MatMul
+	{512},        // 12: fc2/MatMul
 	{10},         // 13: fc2/Bias
 	{10}          // 14: fc2/ReLU
 };
@@ -626,26 +660,26 @@ int input_shape[N_LAYERS][3] = {
 int main() {
 	map<string, NDArray> weights = load_pretrained_model("pretrained.txt");
 
-	Layer* layers[N_LAYERS] = { 
+	Layer* layers[N_LAYERS] = { // TODO: not deallocated
 		new Conv("conv1", vector<int>(input_shape[0], input_shape[0] + 3), weights),
 		new Bias("conv1", vector<int>(input_shape[1], input_shape[1] + 3), weights),
-		new ReLU("conv1", vector<int>(input_shape[2], input_shape[2] + 3), weights),
-		new Pool("pool1", vector<int>(input_shape[3], input_shape[3] + 3), weights),
+		new ReLU("conv1", vector<int>(input_shape[2], input_shape[2] + 3)),
+		new Pool("pool1", vector<int>(input_shape[3], input_shape[3] + 3)),
 
 		new Conv("conv2", vector<int>(input_shape[4], input_shape[4] + 3), weights),
 		new Bias("conv2", vector<int>(input_shape[5], input_shape[5] + 3), weights),
-		new ReLU("conv2", vector<int>(input_shape[6], input_shape[6] + 3), weights),
-		new Pool("pool2", vector<int>(input_shape[7], input_shape[7] + 3), weights),
+		new ReLU("conv2", vector<int>(input_shape[6], input_shape[6] + 3)),
+		new Pool("pool2", vector<int>(input_shape[7], input_shape[7] + 3)),
 
-		new Flatten("flatten", vector<int>(input_shape[8], input_shape[8] + 3), weights),
+		new Flatten("flatten", vector<int>(input_shape[8], input_shape[8] + 3)),
 
 		new MatMul("fc1", vector<int>(input_shape[9], input_shape[9] + 1), weights),
 		new Bias("fc1", vector<int>(input_shape[10], input_shape[10] + 1), weights),
-		new ReLU("fc1", vector<int>(input_shape[11], input_shape[11] + 1), weights),
+		new ReLU("fc1", vector<int>(input_shape[11], input_shape[11] + 1)),
 
 		new MatMul("fc2", vector<int>(input_shape[12], input_shape[12] + 1), weights),
 		new Bias("fc2", vector<int>(input_shape[13], input_shape[13] + 1), weights),
-		new ReLU("fc2", vector<int>(input_shape[14], input_shape[14] + 1), weights)
+		new ReLU("fc2", vector<int>(input_shape[14], input_shape[14] + 1))
 	};
 
 	for (int i = 1; i < N_LAYERS; ++i) {
@@ -660,7 +694,7 @@ int main() {
 	int N, correct = 0;
 	fin >> N;
 #ifdef DEBUG
-	N = 10;
+	N = 1;
 #endif
 	for (int test = 0; test < N; ++test) {
 		static int shape[] = {1, 28, 28};
@@ -698,7 +732,7 @@ int main() {
 		}
 	}
 	printf("%.3f\n", (float) correct / N);
-
+	cout << "Time used:" << float(clock()) / CLOCKS_PER_SEC << endl;
 	return 0;
 }
 

@@ -1,3 +1,3 @@
 all:
-	g++ main.cpp -Wall -O2 -o main
+	g++ main.cpp sha256.cpp -Wall -O2 -o main
 
