@@ -84,7 +84,7 @@ void Conv :: preprocess() {
 		for (int ic = 0; ic < input_c; ++ic) {
 			Complex *B = dft_of_filter + (ic * output_c + oc) * len;
 			for (int pos = 0, cnt = (ic * output_c + oc) * filter_w * filter_h; pos < len; ++pos)
-				B[pos] = pos % input_h < filter_h && pos < lb ? w.array[cnt++] : 0.0f;
+				B[pos] = pos % input_h < filter_h && pos < lb ? w.array[cnt++] : FP :: from(0.0f);
 			for (int pos_l = 0, pos_r = lb - 1; pos_l < pos_r; ++pos_l, --pos_r)
 				swap(B[pos_l], B[pos_r]);
 			assert(int(B + len - dft_of_filter) <= input_c * output_c * len);
@@ -114,7 +114,7 @@ NDArray Conv :: pad(const NDArray &input) {
 		for (int i = -pad_l; i < image_width + pad_r; ++i)
 			for (int j = -pad_t; j < image_height + pad_b; ++j)
 				if (i < 0 || i >= image_width || j < 0 || j >= image_height)
-					output.array.push_back(0.0);
+					output.array.push_back(FP :: from(0.0));
 				else
 					output.array.push_back(input.array[cnt++]);
 	return output;
@@ -139,12 +139,12 @@ NDArray Conv :: forward(const NDArray &_input) {
 	int len = 1;
 	for ( ; len < la + lb - 1; len <<= 1);
 
-	output.array = vector<float>(output_c * output_w * output_h, 0.0f);
+	output.array = vector<FP>(output_c * output_w * output_h, FP :: from(0.0f));
 
 	for (int ic = 0; ic < input_c; ++ic) {
 		Complex *A = dft_of_input + len * ic;
 		for (int pos = 0, cnt = ic * input_w * input_h; pos < len; ++pos) {
-			A[pos] = pos < la ? input.array[cnt++] : 0.0f;
+			A[pos] = pos < la ? input.array[cnt++] : FP :: from(0.0f);
 		}
 		DFT(A, len, 1);
 	}

@@ -46,12 +46,15 @@ Model :: ~Model() {
 }
 
 int Model :: predict(NDArray feed) {
-	for (int i = 0; i < (int) layers.size(); ++i)
+	for (int i = 0; i < (int) layers.size(); ++i) {
+//		cout << "Model :: predict, i = " << i << ", name = " << layers[i]->name << endl;
 		feed = layers[i]->forward(feed);
+//		cout << "\tDone!" << endl;
+	}
 	int argmax = -1;
-	float max = -1e10;
+	FP max = FP :: from(-1e10);
 	for (int i = 0; i < (int) feed.array.size(); ++i) {
-		float value = feed.array[i];
+		FP value = feed.array[i];
 		if (max < value) {
 			max = value;
 			argmax = i;

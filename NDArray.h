@@ -4,17 +4,18 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include "FP.h"
 
 struct NDArray {
 	std::vector<int> shape;
-	std::vector<float> array;
+	std::vector<FP> array;
 
 	NDArray();
 	~NDArray();
 	std::string get_shape_str() const;
 	void check_shape() const;
-	float& get(const std::vector<int> &pos);
-	float get(const std::vector<int> &pos) const;
+	FP& get(const std::vector<int> &pos);
+	FP get(const std::vector<int> &pos) const;
 };
 
 #endif

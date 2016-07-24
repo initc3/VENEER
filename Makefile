@@ -1,13 +1,14 @@
+
 CXX = g++
-CFLAGS = -Wall -O3
+CXXFLAGS = -Wall -O2
 
 all: main
 
 main:  Layers.o sha256.o NDArray.o Model.o main.cpp
-	$(CXX) *.o main.cpp $(CFLAGS) -o main
+	$(CXX) *.o main.cpp $(CXXFLAGS) -o main
 
 %.o: %.cpp %.h
-	$(CXX) $< $(CFLAGS) -c
+	$(CXX) $< $(CXXFLAGS) -c
 
 FFT.o: Complex.o
 
@@ -28,6 +29,10 @@ Flatten.o: Layer.o
 MatMul.o: Layer.o
 
 Model.o: Layers.o
+
+Complex.o: FP.o
+
+NDArray.o: FP.o
 
 clean:
 	rm -f *.o main

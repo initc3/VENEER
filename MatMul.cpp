@@ -48,7 +48,7 @@ NDArray MatMul :: forward(const NDArray &input) {
 	for (int i = 0; i < w.shape[0]; ++i) {
 		// multiply the i-th row with the input vector
 		int input_cnt = 0;
-		float result = 0.0f;
+		FP result = FP :: from(0.0f);
 		for (int j = 0; j < w.shape[1]; ++j)
 			result += w.array[matrix_cnt++] * input.array[input_cnt++];
 		output.array.push_back(result);

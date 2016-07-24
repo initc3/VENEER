@@ -41,8 +41,9 @@ NDArray ReLU :: forward(const NDArray &input) {
 	assert(input.shape == input_shape);
 
 	NDArray output = input;
-	for (int i = 0; i < (int)output.array.size(); ++i)
-		output.array[i] = max(output.array[i], 0.0f);
+	for (int i = 0; i < (int)output.array.size(); ++i) {
+		output.array[i] = max(output.array[i], FP :: from(0.0f) );
+	}
 	return output;
 }
 
