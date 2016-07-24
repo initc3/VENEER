@@ -4,25 +4,27 @@
 #include <iostream>
 #include <climits>
 
-const int NUM_Q = 40;
-const long long TWO_TO_Q = 1ULL << 40;
+typedef int DATA_TYPE;
+
+const int NUM_Q = 16;
+const DATA_TYPE TWO_TO_Q = (DATA_TYPE)1 << NUM_Q;
 
 struct FP {
-	long long n; // a.n = a * (2 ^ NUM_Q)
+	DATA_TYPE n; // a.n = a * (2 ^ NUM_Q)
 
 	FP(): n(0) {
 	}
 
 	static inline FP from(float x) {
-		return FP((long long)(x * (1ULL << NUM_Q)));
+		return FP((DATA_TYPE)(x * TWO_TO_Q));
 	}
 
-	static inline FP internal_constructor(long long x) {
+	static inline FP internal_constructor(DATA_TYPE x) {
 		return FP(x);
 	}
 
 protected:
-	FP(long long n): n(n) {
+	FP(DATA_TYPE n): n(n) {
 	}
 
 };
@@ -37,15 +39,13 @@ inline FP operator - (const FP &a, const FP &b) {
 }
 
 inline FP operator * (const FP &a, const FP &b) { // (a * b).n = a * b * (2 ^ NUM_Q) = a.n * b.n / 2 ^ Q
-	__int128_t result = a.n; // TODO: may not compile in some compiler / platform
+	long long result = a.n; // TODO: may not compile in some compiler / platform
 	result *= b.n;
-	result /= TWO_TO_Q;
-	if (result > LONG_LONG_MAX)
-		result %= LONG_LONG_MAX; // should not happen
-	return FP :: internal_constructor((long long)result);
+	result >>= NUM_Q;
+	return FP :: internal_constructor( (long long) result );
 }
 
-inline FP operator / (const FP &a, long long d) {
+inline FP operator / (const FP &a, DATA_TYPE d) {
 	return FP :: internal_constructor(a.n / d);
 }
 
@@ -63,17 +63,7 @@ inline FP operator - (const FP &a) {
 	return FP :: internal_constructor(-a.n);
 }
 
-inline FP operator *= (FP &a, const FP &b) { // (a * b).n = a * b * (2 ^ NUM_Q) = a.n * b.n / 2 ^ Q
-	__int128_t result = a.n; // TODO: may not compile in some compiler / platform
-	result *= b.n;
-	result /= TWO_TO_Q;
-	if (result > LONG_LONG_MAX)
-		result %= LONG_LONG_MAX; // should not happen
-	a.n = result;
-	return a;
-}
-
-inline FP operator /= (FP &a, long long d) {
+inline FP operator /= (FP &a, DATA_TYPE d) {
 	a.n /= d;
 	return a;
 }
