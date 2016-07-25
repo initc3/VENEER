@@ -44,6 +44,7 @@ NDArray ReLU :: forward(const NDArray &input) {
 	for (int i = 0; i < (int)output.array.size(); ++i) {
 		output.array[i] = max(output.array[i], FP :: from(0.0f) );
 	}
+	Context :: context << new HashTree(output.array);
 	return output;
 }
 

@@ -59,6 +59,7 @@ NDArray Pool :: forward(const NDArray &input) {
 				FP result = max( max( input.get(pos0), input.get(pos1) ), max( input.get(pos2), input.get(pos3) ) );
 				output.array.push_back(result);
 			}
+	Context :: context << new HashTree(output.array);
 	return output;
 }
 

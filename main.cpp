@@ -16,6 +16,10 @@
 #include "NDArray.h"
 #include "Layers.h"
 #include "Model.h"
+#include "HashTree.h"
+#include "FFT.h"
+
+#define Show(x) cout << #x << " = " << (x) << endl
 
 using namespace std;
 
@@ -72,15 +76,27 @@ int main() {
 	vector<int> input_shape(_input_shape, _input_shape + 3);
 	map<string, NDArray> weights = load_pretrained_model("pretrained.txt");
 	Model model(layers, input_shape, weights);
-	
+
 	ifstream fin("test_images.txt");
 
 	int start_time = clock();
-	
+
 	int N, correct = 0;
 	fin >> N;
 	N = 100;
+#ifdef MEASURE_COMPUTATION
+	Show (HashTree :: allocated);
+#endif
 	for (int test_id = 0; test_id < N; ++test_id) {
+#ifdef MEASURE_COMPUTATION
+		FP :: cnt_add = 0;
+		FP :: cnt_sub = 0;
+		FP :: cnt_mul = 0;
+		FP :: cnt_div = 0;
+		FP :: cnt_cmp = 0;
+		HashTree :: allocated = 0;
+		cnt_FFT = 0;
+#endif
 		NDArray image;
 		image.shape = input_shape;
 		image.array = vector<FP>(784, FP :: from(0.0f));
@@ -101,7 +117,18 @@ int main() {
 		if (test_id % 5 == 4 || test_id == N - 1) {
 			puts("");
 		}
+
+#ifdef MEASURE_COMPUTATION
+		Show (FP :: cnt_add);
+		Show (FP :: cnt_sub);
+		Show (FP :: cnt_mul);
+		Show (FP :: cnt_div);
+		Show (FP :: cnt_cmp);
+		Show (HashTree :: allocated);
+		Show (cnt_FFT);
+#endif
 	}
+
 	printf("%.3f\n", (float) correct / N);
 	cout << "Time used:" << float(clock() - start_time) / CLOCKS_PER_SEC << endl;
 	return 0;

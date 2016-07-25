@@ -46,11 +46,8 @@ Model :: ~Model() {
 }
 
 int Model :: predict(NDArray feed) {
-	for (int i = 0; i < (int) layers.size(); ++i) {
-//		cout << "Model :: predict, i = " << i << ", name = " << layers[i]->name << endl;
+	for (int i = 0; i < (int) layers.size(); ++i)
 		feed = layers[i]->forward(feed);
-//		cout << "\tDone!" << endl;
-	}
 	int argmax = -1;
 	FP max = FP :: from(-1e10);
 	for (int i = 0; i < (int) feed.array.size(); ++i) {

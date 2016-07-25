@@ -19,7 +19,7 @@ struct Conv: public Layer {
 
 	void preprocess();
 	NDArray pad(const NDArray &input);
-	NDArray forward(const NDArray &);
+	NDArray forward(const NDArray &input);
 };
 
 #endif

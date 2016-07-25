@@ -6,6 +6,10 @@
 #include "FFT.h"
 using namespace std;
 
+#ifdef MEASURE_COMPUTATION
+int cnt_FFT = 0;
+#endif
+
 //const double PI = 3.14159265358979323846264338327950288;
 
 FP sin_d[] = {
@@ -79,6 +83,9 @@ FP :: from(1.0000000000000000000000000000000000000000000000000000000000),
 };
 
 void DFT(Complex P[], int n, int oper) {
+#ifdef MEASURE_COMPUTATION
+	++cnt_FFT;
+#endif
 	for (int i = 1, j = 0; i < n - 1; i++) {
 		for (int s = n; j ^= s >>= 1, ~j & s; );
 		if (i < j) swap(P[i], P[j]);

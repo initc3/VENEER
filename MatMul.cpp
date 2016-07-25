@@ -53,6 +53,7 @@ NDArray MatMul :: forward(const NDArray &input) {
 			result += w.array[matrix_cnt++] * input.array[input_cnt++];
 		output.array.push_back(result);
 	}
+	Context :: context << new HashTree(output.array);
 	return output;
 }
 
