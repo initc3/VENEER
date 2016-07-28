@@ -44,7 +44,7 @@ hash_to_bytes32 = lambda x : x.decode('hex')
 class Server:
 
 	def __init__(self, a, k, prefix, predict_path, root_path):
-                self.prefix = prefix;
+		self.prefix = prefix;
 		self.a = a;
 		self.k = k;
 		with open(predict_path, "r") as input_file:
@@ -53,17 +53,20 @@ class Server:
 			self.root_hash = map(hash_to_bytes32, input_file.readline().split())
 			self.tree_size = map(int, input_file.readline().split())
 
+
 	def submitPrediction(self):
 		contract.submitPrediction(self.predict, self.root_hash, self.tree_size, sender = self.k)
 
-        def get_position(self, layer, position):
-                if layer == 0:
-                        filename = "Layer_data_input_-1_output.txt"
-                else:
-                        filename = FILES[layer].replace('hashtree', 'output')
-                with open(os.path.join(self.prefix, filename), "r") as input_file:
-                        data = map(int, input_file.read().split())
-                return data[position]
+
+	def get_position(self, layer, position):
+		if layer == 0:
+			filename = "Layer_data_input_-1_output.txt"
+		else:
+			filename = FILES[layer].replace('hashtree', 'output')
+		with open(os.path.join(self.prefix, filename), "r") as input_file:
+			data = map(int, input_file.read().split())
+		return data[position]
+
 
 	def loadHashTree(self, layer):
 		filename = os.path.join(self.prefix, FILES[layer])
@@ -71,18 +74,17 @@ class Server:
 			self.hash_tree = map(hash_to_bytes32, input_file.readline().split())
 
 	def submitHash(self, l, r):
-
 		def get_id(l, r):
 			return (l + r) | int(l != r)
 
 		m = (l + r) >> 1
 		l_id = get_id(l, m)
 		r_id = get_id(m + 1, r)
-#		print self.hash_tree[l_id], self.hash_tree[r_id]
 		contract.submitHash(self.hash_tree[l_id], self.hash_tree[r_id], sender = self.k)
 
 	def submitPathHash(self, layer, pos):
-                reluInput = self.get_position(layer, pos)
+		my_input = self.get_position(layer, pos)
+		my_output = self.get_position(layer + 1, pos)
 
 		def get_id(l, r):
 			return (l + r) | int(l != r)
@@ -98,22 +100,14 @@ class Server:
 			parent_hash.append(self.hash_tree[get_id(l, r)])
 			l_hash.append(self.hash_tree[l_id])
 			r_hash.append(self.hash_tree[r_id])
-#			from Crypto.Hash import SHA256
-#			sha2 = lambda x : SHA256.new(x).digest()
-#			print sha2(self.hash_tree[l_id] + self.hash_tree[r_id]) == sha2(self.hash_tree[get_id(l, r)])
 			if pos <= m:
 				r = m
 			else:
 				l = m + 1
-#		for x in l_hash:
-#			print x
-#		for x in r_hash:
-#			print x
-		
-		return contract.submitPathHash(reluInput, parent_hash, l_hash, r_hash, sender = self.k)
+		return contract.submitPathHash(my_input, my_output, parent_hash, l_hash, r_hash, sender = self.k)
 
-alice = Server(tester.a1, tester.k1, "good/predict.txt", "good/hashtree_roots.txt", "good")
-bob = Server(tester.a2, tester.k2, "bad/predict.txt", "bad/hashtree_roots.txt", "bad")
+alice = Server(tester.a1, tester.k1, "good", "good/predict.txt", "good/hashtree_roots.txt")
+bob = Server(tester.a2, tester.k2, "bad", "bad/predict.txt", "bad/hashtree_roots.txt")
 
 alice.submitPrediction()
 bob.submitPrediction()
@@ -150,13 +144,7 @@ if not alice.submitPathHash(layer - 1, position):
 	print "Data corrupted"
 	sys.exit(-1)
 
-input_data = get_position("good", layer - 1, position)
-alice_result = get_position("good", layer, position)
-bob_result = get_position("bad", layer, position)
-
-print input_data, alice_result, bob_result
-
-who = contract.verifyReLU(input_data, alice_result, bob_result)
+who = contract.verifyReLU(sender = tester.k0)
 
 if who == 0:
 	print "Alice is wrong"

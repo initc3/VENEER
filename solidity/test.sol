@@ -3,15 +3,15 @@ contract VENEER {
     struct Server {
         address addr;         // the address of the server
         int predict;          // the prediction made by the server
-        HashTree[14] tree;    // the hash code of root of each tree, TODO: could hash be stored in uint?
+        HashTree[14] tree;    // the hash code of root of each tree
 
-        uint lHash;           // hash of left child
-        uint rHash;           // hash of right child
+        bytes32 lHash;           // hash of left child
+        bytes32 rHash;           // hash of right child
     }
 
     struct HashTree {
         int size;
-        uint rootHash;
+        bytes32 rootHash;
     }
 
     modifier onlyCustomer() {
@@ -22,6 +22,12 @@ contract VENEER {
 
     modifier onlyServer() {
         if (servers[msg.sender].addr != msg.sender)
+            throw;
+        _
+    }
+
+    modifier onlyAlice() {
+        if (servers[alice].addr != msg.sender)
             throw;
         _
     }
@@ -42,7 +48,9 @@ contract VENEER {
     int rBound;
     bytes32 input;
 
+	bool dataCorrupted;
     int reluInput;
+	int aliceOutput;
 
     function VENEER(address _alice, address _bob, bytes32 _input) {
         customer = msg.sender;
@@ -68,7 +76,9 @@ contract VENEER {
         b.lHash = 0;
         b.rHash = 0;
 
-	reluInput = -1;
+		dataCorrupted = false;
+		reluInput = -1;
+		aliceOutput = -1;
     }
 
 	function testSender() returns (address a) {
@@ -76,7 +86,7 @@ contract VENEER {
 		return a;
 	}
 
-    function submitPrediction(int predict, uint[14] rootHash, int[14] length) onlyServer {
+    function submitPrediction(int predict, bytes32[14] rootHash, int[14] length) onlyServer {
         Server server = servers[msg.sender];
         if (server.predict != -1 || at != -1)
             throw;
@@ -104,7 +114,7 @@ contract VENEER {
         r = rBound;
     }
     
-    function submitHash(uint lHash, uint rHash) onlyServer {
+    function submitHash(bytes32 lHash, bytes32 rHash) onlyServer {
         Server server = servers[msg.sender];
         server.lHash = lHash;
         server.rHash = rHash;
@@ -123,24 +133,44 @@ contract VENEER {
         reachLeaf = (lBound == rBound);
     }
 
-    function verifyReLU(int input, int aliceResult, int bobResult) constant onlyServer returns (int who) {
+    function verifyReLU() constant onlyCustomer returns (int who) {
+		if (dataCorrupted) {
+			who = 0;
+			return;
+		}
+		int input = reluInput;
     	if (input < 0)
     		input = 0;
-    	if (aliceResult != input)
+    	if (aliceOutput != input)
     		who = 0;
     	else
     		who = 1;
     }
 
-	function submitPathHash(int input, bytes32[] parent_hash, bytes32[] l_hash, bytes32[] r_hash) returns (bool correct) {
-
-		for (uint i = 0; i < parent_hash.length; ++i) {
+	function submitPathHash(int input, int output, bytes32[] parent_hash, bytes32[] l_hash, bytes32[] r_hash) onlyAlice returns (bool correct) {
+        Server server = servers[msg.sender];
+		if (server.tree[uint(at - 1)].rootHash != parent_hash[0]) {
+			correct = false;
+			dataCorrupted = true;
+			return;
+		}
+		uint i;
+		for (i = 0; i < parent_hash.length; ++i) {
 			if (sha256(l_hash[i], r_hash[i]) != parent_hash[i]) {
 				correct = false;
+				dataCorrupted = true;
+				return;
+			}
+		}
+		for (i = 1; i < parent_hash.length; ++i) {
+			if (parent_hash[i] != l_hash[i - 1] && parent_hash[i] != r_hash[i - 1]) {
+				correct = false;
+				dataCorrupted = true;
 				return;
 			}
 		}
 		correct = true;
 		reluInput = input;
+		aliceOutput = output;
 	}
 }
