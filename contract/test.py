@@ -16,17 +16,17 @@ FILES = [
 	"Layer_conv2_relu_6_hashtree.txt",
 	"Layer_pool2_pool_7_hashtree.txt",
 
-	"Layer_fc1_matmul_8_hashtree.txt",
-	"Layer_fc1_bias_9_hashtree.txt",
-	"Layer_fc1_relu_10_hashtree.txt",
+	"Layer_fc1_matmul_9_hashtree.txt",
+	"Layer_fc1_bias_10_hashtree.txt",
+	"Layer_fc1_relu_11_hashtree.txt",
 
-	"Layer_fc2_matmul_8_hashtree.txt",
-	"Layer_fc2_bias_9_hashtree.txt",
-	"Layer_fc2_relu_10_hashtree.txt"
+	"Layer_fc2_matmul_12_hashtree.txt",
+	"Layer_fc2_bias_13_hashtree.txt",
+	"Layer_fc2_relu_14_hashtree.txt"
 ]
 
 tester_state = state()
-contract = tester_state.abi_contract(open("./test.sol").read(), constructor_parameters = (tester.a1, tester.a2, 
+contract = tester_state.abi_contract(open("./contract/test.sol").read(), constructor_parameters = (tester.a1, tester.a2, 
 '70c06dd243330a625cfe7495c41cbae41eb14a58e90b3a34ce6d2a0f947ad6c0'.decode('hex')), language = "solidity")
 
 print "a0 =", type(tester.a0), str(tester.a0.encode("hex")), type(tester.k0), str(tester.k0.encode("hex"))
@@ -35,8 +35,8 @@ print "a2 =", type(tester.a2), str(tester.a2.encode("hex")), type(tester.k2), st
 
 os.system("mkdir -p good")
 os.system("mkdir -p bad")
-#os.system("./main predict --level 0 --prefix good")
-#os.system("./main predict --level 0 --prefix bad --layer 2 --position 1234")
+os.system("./main predict --level 0 --prefix good")
+os.system("./main predict --level 0 --prefix bad --layer 2 --position 1234")
 
 #hash_to_int = lambda x: int(x, 16)
 hash_to_bytes32 = lambda x : x.decode('hex')
