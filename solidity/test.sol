@@ -35,12 +35,14 @@ contract VENEER {
     address customer;
     address alice;
     address bob;
-    mapping (address => Server) servers;
+    mapping (address => Server) public servers;
 
     int at;               // we are going to verify the tree 'at'
     int lBound;           // which interval the node represents [lBound, rBound]
     int rBound;
     bytes32 input;
+
+    int reluInput;
 
     function VENEER(address _alice, address _bob, bytes32 _input) {
         customer = msg.sender;
@@ -65,6 +67,8 @@ contract VENEER {
         b.predict = -1;
         b.lHash = 0;
         b.rHash = 0;
+
+	reluInput = -1;
     }
 
 	function testSender() returns (address a) {
@@ -91,11 +95,11 @@ contract VENEER {
             }
     }
     
-    function getAt() returns (int result) {
+    function getAt() constant returns (int result) {
         result = at;
     }
 
-    function getBound() returns (int l, int r) {
+    function getBound() constant returns (int l, int r) {
         l = lBound;
         r = rBound;
     }
@@ -119,7 +123,7 @@ contract VENEER {
         reachLeaf = (lBound == rBound);
     }
 
-    function verifyReLU(int input, int aliceResult, int bobResult) onlyCustomer returns (int who) {
+    function verifyReLU(int input, int aliceResult, int bobResult) constant onlyServer returns (int who) {
     	if (input < 0)
     		input = 0;
     	if (aliceResult != input)
@@ -128,7 +132,7 @@ contract VENEER {
     		who = 1;
     }
 
-	function submitPathHash(bytes32[] parent_hash, bytes32[] l_hash, bytes32[] r_hash) returns (bool correct) {
+	function submitPathHash(int input, bytes32[] parent_hash, bytes32[] l_hash, bytes32[] r_hash) returns (bool correct) {
 
 		for (uint i = 0; i < parent_hash.length; ++i) {
 			if (sha256(l_hash[i], r_hash[i]) != parent_hash[i]) {
@@ -137,5 +141,6 @@ contract VENEER {
 			}
 		}
 		correct = true;
+		reluInput = input;
 	}
 }
