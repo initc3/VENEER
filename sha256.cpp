@@ -188,8 +188,8 @@ void toSHA256(const unsigned char *a, const unsigned char *b, unsigned char *out
 		} input;
 		unsigned char output[SHA256 :: DIGEST_SIZE + SHA256 :: DIGEST_SIZE];
 	} converter;
-	memcpy(converter.input.a, a, sizeof(SHA256 :: DIGEST_SIZE));
-	memcpy(converter.input.b, b, sizeof(SHA256 :: DIGEST_SIZE));
+	memcpy(converter.input.a, a, SHA256 :: DIGEST_SIZE);
+	memcpy(converter.input.b, b, SHA256 :: DIGEST_SIZE);
 	sha256(converter.output, sizeof(converter), output);
 }
 

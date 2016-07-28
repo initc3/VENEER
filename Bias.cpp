@@ -60,7 +60,8 @@ NDArray Bias :: forward(const NDArray &input) {
 			output.array[cnt++] += bias;
 		}
 	}
-	Context :: context << new HashTree(output.array);
+	if (Context :: context.level == 0)
+		Context :: context << new HashTree(output.array) << output.array;
 	return output;
 }
 

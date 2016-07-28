@@ -11,7 +11,7 @@ struct Node {
 };
 
 struct HashTree {
-	Node *t; // TODO: did not deallocate
+	Node *t;
 	int length;
 
 	HashTree(Node *t, int length);

@@ -23,7 +23,6 @@ using namespace std;
 
 
 Conv :: ~Conv() {
-	cout << "~Conv" << endl;
 	if (dft_of_filter)
 		delete [] dft_of_filter;
 	if (dft_of_input)
@@ -91,7 +90,6 @@ void Conv :: preprocess() {
 				swap(B[pos_l], B[pos_r]);
 			assert(int(B + len - dft_of_filter) <= input_c * output_c * len);
 			DFT(B, len, 1);
-			Context :: context << new HashTree(B, len);
 		}
 	}
 }
@@ -120,7 +118,6 @@ NDArray Conv :: pad(const NDArray &input) {
 					output.array.push_back(FP :: from(0.0));
 				else
 					output.array.push_back(input.array[cnt++]);
-	Context :: context << new HashTree(input.array);
 	return output;
 }
 
@@ -151,7 +148,6 @@ NDArray Conv :: forward(const NDArray &_input) {
 			A[pos] = pos < la ? input.array[cnt++] : FP :: from(0.0f);
 		}
 		DFT(A, len, 1);
-		Context :: context << new HashTree(A, len);
 	}
 
 	for (int oc = 0; oc < output_c; ++oc) {
@@ -162,7 +158,6 @@ NDArray Conv :: forward(const NDArray &_input) {
 			for (int i = 0; i < len; i++)
 				C[i] = mul(A[i], B[i]);
 			DFT(C, len, -1);
-//			Context :: context << new HashTree(C, len);
 			for (int i = 0; i < la + lb - 1; ++i)
 				C[i].x = C[i].x / len;
 			int cnt = oc * output_w * output_h;
@@ -173,7 +168,8 @@ NDArray Conv :: forward(const NDArray &_input) {
 				}
 		}
 	}
-	Context :: context << new HashTree(output.array);
+	if (Context :: context.level == 0)
+		Context :: context << new HashTree(output.array) << output.array;
 	return output;
 }
 

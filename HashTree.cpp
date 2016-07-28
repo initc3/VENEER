@@ -52,6 +52,8 @@ HashTree :: ~HashTree() {
 
 int HashTree :: build(int l, int r) {
 	int id = (l + r) | (l != r);
+	if (l == r)
+		assert(id % 2 == 0);
 	if (l < r) {
 		int m( (l + r) >> 1 );
 		toSHA256(t[build(l, m)].hash, t[build(m + 1, r)].hash, t[id].hash);

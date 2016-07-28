@@ -48,7 +48,9 @@ map<string, NDArray> load_pretrained_model(const char *path) {
 }
 
 
-int main() {
+int main(int argc, char **argv) {
+	Context :: context.parse(argc, argv);
+
 	int _input_shape[] = {1, 28, 28};
 	pair<string, string> _layers[] = {
 		make_pair("conv", "conv1"),
@@ -83,7 +85,7 @@ int main() {
 
 	int N, correct = 0;
 	fin >> N;
-	N = 100;
+	N = 1;
 #ifdef MEASURE_COMPUTATION
 	Show (HashTree :: allocated);
 #endif
@@ -106,6 +108,8 @@ int main() {
 		for (int i = 0; i < 784; ++i)
 			fin >> image.array[i];
 		int predict = model.predict(image);
+		if (Context :: context.mode == 0)
+			Context :: context.makePrediction(predict);
 
 		if (predict == label) {
 			printf(".");
@@ -128,7 +132,6 @@ int main() {
 		Show (cnt_FFT);
 #endif
 	}
-
 	printf("%.3f\n", (float) correct / N);
 	cout << "Time used:" << float(clock() - start_time) / CLOCKS_PER_SEC << endl;
 	return 0;
