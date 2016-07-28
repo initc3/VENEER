@@ -25,9 +25,8 @@ FILES = [
 	"Layer_fc2_relu_10_hashtree.txt"
 ]
 
-
 tester_state = state()
-contract = tester_state.abi_contract(open("./test.sol").read(), constructor_parameters = (tester.a1, tester.a2), language = "solidity")
+contract = tester_state.abi_contract(open("./test.sol").read(), constructor_parameters = (tester.a1, tester.a2, '70c06dd243330a625cfe7495c41cbae41eb14a58e90b3a34ce6d2a0f947ad6c0'.decode('hex')), language = "solidity")
 
 print "a0 =", type(tester.a0), str(tester.a0.encode("hex")), type(tester.k0), str(tester.k0.encode("hex"))
 print "a1 =", type(tester.a1), str(tester.a1.encode("hex")), type(tester.k1), str(tester.k1.encode("hex"))

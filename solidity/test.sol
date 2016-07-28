@@ -40,11 +40,14 @@ contract VENEER {
     int at;               // we are going to verify the tree 'at'
     int lBound;           // which interval the node represents [lBound, rBound]
     int rBound;
+    bytes32 input;
 
-    function VENEER(address _alice, address _bob) {
+    function VENEER(address _alice, address _bob, bytes32 _input) {
         customer = msg.sender;
         alice = _alice;
         bob = _bob;
+        input = _input;
+
         if (msg.sender == alice || msg.sender == bob || alice == bob)
             throw;
 
