@@ -26,7 +26,8 @@ FILES = [
 ]
 
 tester_state = state()
-contract = tester_state.abi_contract(open("./test.sol").read(), constructor_parameters = (tester.a1, tester.a2, '70c06dd243330a625cfe7495c41cbae41eb14a58e90b3a34ce6d2a0f947ad6c0'.decode('hex')), language = "solidity")
+contract = tester_state.abi_contract(open("./test.sol").read(), constructor_parameters = (tester.a1, tester.a2, 
+'70c06dd243330a625cfe7495c41cbae41eb14a58e90b3a34ce6d2a0f947ad6c0'.decode('hex')), language = "solidity")
 
 print "a0 =", type(tester.a0), str(tester.a0.encode("hex")), type(tester.k0), str(tester.k0.encode("hex"))
 print "a1 =", type(tester.a1), str(tester.a1.encode("hex")), type(tester.k1), str(tester.k1.encode("hex"))
@@ -42,7 +43,8 @@ hash_to_bytes32 = lambda x : x.decode('hex')
 
 class Server:
 
-	def __init__(self, a, k, predict_path, root_path):
+	def __init__(self, a, k, prefix, predict_path, root_path):
+                self.prefix = prefix;
 		self.a = a;
 		self.k = k;
 		with open(predict_path, "r") as input_file:
@@ -54,8 +56,17 @@ class Server:
 	def submitPrediction(self):
 		contract.submitPrediction(self.predict, self.root_hash, self.tree_size, sender = self.k)
 
-	def loadHashTree(self, layer, prefix):
-		filename = os.path.join(prefix, FILES[layer])
+        def get_position(self, layer, position):
+                if layer == 0:
+                        filename = "Layer_data_input_-1_output.txt"
+                else:
+                        filename = FILES[layer].replace('hashtree', 'output')
+                with open(os.path.join(self.prefix, filename), "r") as input_file:
+                        data = map(int, input_file.read().split())
+                return data[position]
+
+	def loadHashTree(self, layer):
+		filename = os.path.join(self.prefix, FILES[layer])
 		with open(filename, "r") as input_file:
 			self.hash_tree = map(hash_to_bytes32, input_file.readline().split())
 
@@ -71,6 +82,8 @@ class Server:
 		contract.submitHash(self.hash_tree[l_id], self.hash_tree[r_id], sender = self.k)
 
 	def submitPathHash(self, layer, pos):
+                reluInput = self.get_position(layer, pos)
+
 		def get_id(l, r):
 			return (l + r) | int(l != r)
 
@@ -97,10 +110,10 @@ class Server:
 #		for x in r_hash:
 #			print x
 		
-		return contract.submitPathHash(parent_hash, l_hash, r_hash, sender = self.k)
+		return contract.submitPathHash(reluInput, parent_hash, l_hash, r_hash, sender = self.k)
 
-alice = Server(tester.a1, tester.k1, "good/predict.txt", "good/hashtree_roots.txt")
-bob = Server(tester.a2, tester.k2, "bad/predict.txt", "bad/hashtree_roots.txt")
+alice = Server(tester.a1, tester.k1, "good/predict.txt", "good/hashtree_roots.txt", "good")
+bob = Server(tester.a2, tester.k2, "bad/predict.txt", "bad/hashtree_roots.txt", "bad")
 
 alice.submitPrediction()
 bob.submitPrediction()
@@ -115,8 +128,8 @@ layer = contract.getAt(sender = tester.k0)
 
 print "First mismatch layer is", layer
 
-alice.loadHashTree(layer, "good")
-bob.loadHashTree(layer, "bad")
+alice.loadHashTree(layer)
+bob.loadHashTree(layer)
 
 while True:
 	l, r = contract.getBound(sender = tester.k0)
@@ -131,16 +144,7 @@ print "different_position =", position
 
 os.system(("./main interactive --level 1 --position %d --layer %d --prefix good") % (position, layer))
 
-def get_position(prefix, layer, position):
-	if layer == 0:
-		filename = "Layer_data_input_-1_output.txt"
-	else:
-		filename = FILES[layer].replace('hashtree', 'output')
-	with open(os.path.join(prefix, filename), "r") as input_file:
-		data = map(int, input_file.read().split())
-	return data[position]
-
-alice.loadHashTree(layer - 1, "good")
+alice.loadHashTree(layer - 1)
 
 if not alice.submitPathHash(layer - 1, position):
 	print "Data corrupted"
