@@ -130,7 +130,8 @@ contract VENEER {
         else {
             throw;
         }
-        reachLeaf = (lBound == rBound);
+	servers[alice].lHash = servers[alice].rHash = 0;
+	servers[bob  ].lHash = servers[bob  ].rHash = 0;
     }
 
     function verifyReLU() constant onlyCustomer returns (int who) {
