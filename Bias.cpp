@@ -55,11 +55,13 @@ NDArray Bias :: forward(const NDArray &input) {
 	NDArray output = input;
 	int cnt = 0;
 	for (int i = 0; i < (int)b.shape.size(); ++i) {
-		float bias = b.array[i];
+		FP bias = b.array[i];
 		for (int j = 0; j < alter; ++j) {
 			output.array[cnt++] += bias;
 		}
 	}
+	if (Context :: context.level == 0)
+		Context :: context << new HashTree(output.array) << output.array;
 	return output;
 }
 

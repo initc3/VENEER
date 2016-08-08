@@ -41,8 +41,17 @@ NDArray ReLU :: forward(const NDArray &input) {
 	assert(input.shape == input_shape);
 
 	NDArray output = input;
-	for (int i = 0; i < (int)output.array.size(); ++i)
-		output.array[i] = max(output.array[i], 0.0f);
+	for (int i = 0; i < (int)output.array.size(); ++i) {
+		output.array[i] = max(output.array[i], FP :: from(0.0f) );
+		if (Context :: context.this_layer == Context :: context.layer && Context :: context.position == i) {
+			output.array[i] = FP :: from(1000.0f);
+		}
+		if (Context :: context.mode == 1 && Context :: context.level == 1 && Context :: context.position == i && Context :: context.this_layer == Context :: context.layer) {
+			Context :: context << input.array[i];
+		}
+	}
+	if (Context :: context.level == 0)
+		Context :: context << new HashTree(output.array) << output.array;
 	return output;
 }
 

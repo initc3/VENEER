@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include "NDArray.h"
+#include "HashTree.h"
+#include "Context.h"
 
 struct Layer {
 	std::string name;

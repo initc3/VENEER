@@ -33,7 +33,7 @@ void NDArray :: check_shape() const {
 	assert (e == (int) array.size());
 }
 
-float& NDArray :: get(const vector<int> &pos) {
+FP& NDArray :: get(const vector<int> &pos) {
 	int p = 0, mul = 1;
 	for (int i = (int)pos.size() - 1; i >= 0; --i) {
 		p += mul * pos[i];
@@ -42,7 +42,7 @@ float& NDArray :: get(const vector<int> &pos) {
 	return array[p];
 }
 
-float NDArray :: get(const vector<int> &pos) const {
+FP NDArray :: get(const vector<int> &pos) const {
 	int p = 0, mul = 1;
 	for (int i = (int)pos.size() - 1; i >= 0; --i) {
 		p += mul * pos[i];

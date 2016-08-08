@@ -2,12 +2,14 @@
 #ifndef __COMPLEX_H
 #define __COMPLEX_H
 
-struct Complex {
-	float x, y;
+#include "FP.h"
 
-	Complex() : x(0.0), y(0.0) {}
-	Complex(float x) : x(x), y(0.0) {}
-	Complex(float x, float y): x(x), y(y) {}
+struct Complex {
+	FP x, y;
+
+	Complex() : x(), y() {}
+	Complex(const FP &x) : x(x), y() {}
+	Complex(const FP &x, const FP &y): x(x), y(y) {}
 };
 
 inline Complex mul(const Complex &a, const Complex &b) {

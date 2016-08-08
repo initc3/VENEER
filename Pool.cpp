@@ -56,9 +56,11 @@ NDArray Pool :: forward(const NDArray &input) {
 				vector<int> pos1(_pos1, _pos1 + 3);
 				vector<int> pos2(_pos2, _pos2 + 3);
 				vector<int> pos3(_pos3, _pos3 + 3);
-				float result = max( max( input.get(pos0), input.get(pos1) ), max( input.get(pos2), input.get(pos3) ) );
+				FP result = max( max( input.get(pos0), input.get(pos1) ), max( input.get(pos2), input.get(pos3) ) );
 				output.array.push_back(result);
 			}
+	if (Context :: context.level == 0)
+		Context :: context << new HashTree(output.array) << output.array;
 	return output;
 }
 
